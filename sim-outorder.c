@@ -2080,28 +2080,25 @@ static int alloc_physreg(struct ROB_entry* rob_entry){
     assert(rob_entry->physreg >= 0);
   }
 //
-    contexts[0].archreg_start[rob_entry->archreg] = sim_cycle;
-    //printf("%f\n", sim_cycle);
+    contexts[rob_entry->context_id].archreg_start[rob_entry->archreg] = sim_cycle;
   
   /* update the rename table */
   contexts[rob_entry->context_id].rename_table[rob_entry->archreg] = rob_entry->physreg;
 // ArchReg Counter update
-  contexts[0].archreg_count[rob_entry->archreg] += 1;
-  contexts[0].archreg_consumer[rob_entry->archreg] +=1;
-  //printf("%d ", rob_entry->physreg);
-  //printf("%d\n", contexts[0].archreg_consumer[rob_entry->physreg]);
+  contexts[rob_entry->context_id].archreg_count[rob_entry->archreg] += 1;
+  contexts[rob_entry->context_id].archreg_consumer[rob_entry->archreg] +=1;
 //
-  if(contexts[0].archreg_rename1[rob_entry->archreg] != 0){
-    if(contexts[0].archreg_rename2[rob_entry->archreg] != 0) {
-        contexts[0].archreg_rename[rob_entry->archreg] += (contexts[0].archreg_rename2[rob_entry->archreg] - contexts[0].archreg_rename1[rob_entry->archreg]);
-        contexts[0].archreg_rename1[rob_entry->archreg] = 0;
-        contexts[0].archreg_rename2[rob_entry->archreg] = 0;
+  if(contexts[rob_entry->context_id].archreg_rename1[rob_entry->archreg] != 0){
+    if(contexts[rob_entry->context_id].archreg_rename2[rob_entry->archreg] != 0) {
+        contexts[rob_entry->context_id].archreg_rename[rob_entry->archreg] += (contexts[rob_entry->context_id].archreg_rename2[rob_entry->archreg] - contexts[rob_entry->context_id].archreg_rename1[rob_entry->archreg]);
+        contexts[rob_entry->context_id].archreg_rename1[rob_entry->archreg] = 0;
+        contexts[rob_entry->context_id].archreg_rename2[rob_entry->archreg] = 0;
     }
     else
-        contexts[0].archreg_rename2[rob_entry->archreg] = sim_cycle;
+        contexts[rob_entry->context_id].archreg_rename2[rob_entry->archreg] = sim_cycle;
   }
   else
-      contexts[0].archreg_rename1[rob_entry->archreg] = sim_cycle;
+      contexts[rob_entry->context_id].archreg_rename1[rob_entry->archreg] = sim_cycle;
 
   assert(rob_entry->physreg >= 0);
 
@@ -2905,11 +2902,9 @@ commit(int context_id)
 	  fp_reg_file[contexts[context_id].ROB[contexts[context_id].ROB_head].old_physreg].state = REG_FREE;
 	}
 //
-    int temp = contexts[0].ROB[contexts[0].ROB_head].archreg;
-    contexts[0].archreg_end[temp] = sim_cycle;
-    contexts[0].archreg_lifetime[temp] += contexts[0].archreg_end[temp] - contexts[0].archreg_start[temp];
-    //printf("ArchReg Lifetime End Start\n");
-    //printf("%d\t %llu\t %llu\t %llu\n", temp, contexts[0].archreg_lifetime[temp], contexts[0].archreg_end[temp], contexts[0].archreg_start[temp]);
+    int temp = contexts[context_id].ROB[contexts[context_id].ROB_head].archreg;
+    contexts[context_id].archreg_end[temp] = sim_cycle;
+    contexts[context_id].archreg_lifetime[temp] += contexts[context_id].archreg_end[temp] - contexts[context_id].archreg_start[temp];
       }
       
       if(contexts[context_id].ROB[contexts[context_id].ROB_head].physreg >= 0){
@@ -3531,7 +3526,15 @@ wakeup(void)
 	  readyq_enqueue(rs);
 //
       i++;
-      flag = 1;
+      //flag = 1;
+      if(i < contexts[rs->context_id].wakeup_min) {
+        contexts[rs->context_id].wakeup_min = i; 
+      }
+      if(i > contexts[rs->context_id].wakeup_max) {
+        contexts[rs->context_id].wakeup_max = i;
+      }
+      contexts[rs->context_id].wakeup_average += i;
+      contexts[rs->context_id].wakeup_count++;
 	}else{
 	  wait_q_enqueue(rs, sim_cycle);
 	}
@@ -3539,16 +3542,16 @@ wakeup(void)
 	RSLINK_FREE(node);
       }
     }
-    if(flag == 1) {
-      if(i < contexts[0].wakeup_min) {
-        contexts[0].wakeup_min = i; 
+    /*if(flag == 1) {
+      if(i < contexts[rs->context_id].wakeup_min) {
+        contexts[rs->context_id].wakeup_min = i; 
       }
-      if(i > contexts[0].wakeup_max) {
-        contexts[0].wakeup_max = i;
+      if(i > contexts[rs->context_id].wakeup_max) {
+        contexts[rs->context_id].wakeup_max = i;
       }
-      contexts[0].wakeup_average += i;
-      contexts[0].wakeup_count++;
-    }
+      contexts[rs->context_id].wakeup_average += i;
+      contexts[rs->context_id].wakeup_count++;
+    }*/
 }
 
 /*
@@ -6612,31 +6615,32 @@ sim_main(void)
           //printf("max_insts\n");
           printf("ArchReg: ## Count Consumer\t Lifetime\t RenameCycles\n");
           for(j = 0; j < MD_TOTAL_REGS; j++) {
-              if(contexts[0].archreg_count[j] > 0) {
-                printf("ArchReg:%2d\t %d\t %d\t %lld\t\t %lld\n", j, contexts[0].archreg_count[j], 
-                    contexts[0].archreg_consumer[j]/contexts[0].archreg_count[j], 
-                    contexts[0].archreg_lifetime[j]/contexts[0].archreg_count[j], 
-                    contexts[0].archreg_rename[j]/contexts[0].archreg_count[j]);
+              printf("Context[%d]\n", i);
+              if(contexts[i].archreg_count[j] > 0) {
+                printf("ArchReg:%2d\t %d\t %d\t %lld\t\t %lld\n", j, contexts[i].archreg_count[j], 
+                    contexts[i].archreg_consumer[j]/contexts[i].archreg_count[j], 
+                    contexts[i].archreg_lifetime[j]/contexts[i].archreg_count[j], 
+                    contexts[i].archreg_rename[j]/contexts[i].archreg_count[j]);
               }else{
-                printf("ArchReg:%2d\t %d\t %d\t %lld\t\t %lld\n", j, contexts[0].archreg_count[j], 
-                    contexts[0].archreg_consumer[j], 
-                    contexts[0].archreg_lifetime[j], 
-                    contexts[0].archreg_rename[j]);
+                printf("ArchReg:%2d\t %d\t %d\t %lld\t\t %lld\n", j, contexts[i].archreg_count[j], 
+                    contexts[i].archreg_consumer[j], 
+                    contexts[i].archreg_lifetime[j], 
+                    contexts[i].archreg_rename[j]);
               }
 
-              if(contexts[0].archreg_count[j] != 0) {
-                k += contexts[0].archreg_consumer[j]/contexts[0].archreg_count[j];
-                m += contexts[0].archreg_lifetime[j]/contexts[0].archreg_count[j];
-                n += contexts[0].archreg_rename[j]/contexts[0].archreg_count[j];
+              if(contexts[i].archreg_count[j] != 0) {
+                k += contexts[i].archreg_consumer[j]/contexts[i].archreg_count[j];
+                m += contexts[i].archreg_lifetime[j]/contexts[i].archreg_count[j];
+                n += contexts[i].archreg_rename[j]/contexts[i].archreg_count[j];
               }
           }
           //printf("%d\n", MD_TOTAL_REGS);
           printf("ArchReg Consumer Avg: %f\t %f\n", k/MD_TOTAL_REGS, k);
           printf("ArchReg Lifetime Avg: %f\t %lld\n", (float)m/MD_TOTAL_REGS, m);
           printf("ArchReg Cycle Avg: %lld\n", n/MD_TOTAL_REGS);
-          printf("WakeupMin: %d\n", contexts[0].wakeup_min);
-          printf("WakeupMax: %d\n", contexts[0].wakeup_max);
-          printf("WakeupAvg: %f\n", (float)contexts[0].wakeup_average/contexts[0].wakeup_count);
+          printf("WakeupMin: %d\n", contexts[i].wakeup_min);
+          printf("WakeupMax: %d\n", contexts[i].wakeup_max);
+          printf("WakeupAvg: %f\n", (float)contexts[i].wakeup_average/contexts[i].wakeup_count);
 	    return;
       }
 	}
