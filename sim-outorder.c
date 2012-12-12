@@ -6613,9 +6613,9 @@ sim_main(void)
 	  done = 0;
 	  if(!max_insts || contexts[i].sim_num_insn >= max_insts){
           //printf("max_insts\n");
+          printf("Context[%d]\n", i);
           printf("ArchReg: ## Count Consumer\t Lifetime\t RenameCycles\n");
           for(j = 0; j < MD_TOTAL_REGS; j++) {
-              printf("Context[%d]\n", i);
               if(contexts[i].archreg_count[j] > 0) {
                 printf("ArchReg:%2d\t %d\t %d\t %lld\t\t %lld\n", j, contexts[i].archreg_count[j], 
                     contexts[i].archreg_consumer[j]/contexts[i].archreg_count[j], 
