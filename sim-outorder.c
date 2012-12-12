@@ -1641,6 +1641,7 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
 		     "total number of instructions committed for this thread",
 		     &contexts[i].sim_num_insn, contexts[i].sim_num_insn, NULL);
   }
+      
   stat_reg_counter(sdb, "sim_num_refs",
 		   "total number of loads and stores committed",
 		   &sim_num_refs, 0, NULL);
@@ -1675,6 +1676,12 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
   stat_reg_counter(sdb, "sim_total_branches",
 		   "total number of branches executed",
 		   &sim_total_branches, /* initial value */0, /* format */NULL);
+//
+
+//for(i = 0; i < MD_TOTAL_REGS; i++)
+  //stat_reg_counter(sdb, "archreg", "arch reg rename count", archreg_count[i], 0, NULL);
+  //printf("%d %d\n", i, contexts[0].archreg_count[i]);
+
 
   /* register performance stats */
   stat_reg_counter(sdb, "sim_cycle",
@@ -2061,6 +2068,8 @@ static int alloc_physreg(struct ROB_entry* rob_entry){
     int_reg_file[rob_entry->physreg].spec_ready = INF;
     int_reg_file[rob_entry->physreg].ready = INF;
     assert(rob_entry->physreg >= 0);
+//
+//    contexts[0].archreg_start[rob_entry->archreg] = sim_cycle;
   }
   else{
     assert(fp_reg_file[rob_entry->physreg].state == REG_FREE);
@@ -2070,9 +2079,29 @@ static int alloc_physreg(struct ROB_entry* rob_entry){
     fp_reg_file[rob_entry->physreg].ready = INF;
     assert(rob_entry->physreg >= 0);
   }
+//
+    contexts[0].archreg_start[rob_entry->archreg] = sim_cycle;
+    //printf("%f\n", sim_cycle);
   
   /* update the rename table */
   contexts[rob_entry->context_id].rename_table[rob_entry->archreg] = rob_entry->physreg;
+// ArchReg Counter update
+  contexts[0].archreg_count[rob_entry->archreg] += 1;
+  contexts[0].archreg_consumer[rob_entry->archreg] +=1;
+  //printf("%d ", rob_entry->physreg);
+  //printf("%d\n", contexts[0].archreg_consumer[rob_entry->physreg]);
+//
+  if(contexts[0].archreg_rename1[rob_entry->archreg] != 0){
+    if(contexts[0].archreg_rename2[rob_entry->archreg] != 0) {
+        contexts[0].archreg_rename[rob_entry->archreg] += (contexts[0].archreg_rename2[rob_entry->archreg] - contexts[0].archreg_rename1[rob_entry->archreg]);
+        contexts[0].archreg_rename1[rob_entry->archreg] = 0;
+        contexts[0].archreg_rename2[rob_entry->archreg] = 0;
+    }
+    else
+        contexts[0].archreg_rename2[rob_entry->archreg] = sim_cycle;
+  }
+  else
+      contexts[0].archreg_rename1[rob_entry->archreg] = sim_cycle;
 
   assert(rob_entry->physreg >= 0);
 
@@ -2875,6 +2904,12 @@ commit(int context_id)
 	  assert(fp_reg_file[contexts[context_id].ROB[contexts[context_id].ROB_head].old_physreg].state == REG_ARCH);
 	  fp_reg_file[contexts[context_id].ROB[contexts[context_id].ROB_head].old_physreg].state = REG_FREE;
 	}
+//
+    int temp = contexts[0].ROB[contexts[0].ROB_head].archreg;
+    contexts[0].archreg_end[temp] = sim_cycle;
+    contexts[0].archreg_lifetime[temp] += contexts[0].archreg_end[temp] - contexts[0].archreg_start[temp];
+    //printf("ArchReg Lifetime End Start\n");
+    //printf("%d\t %llu\t %llu\t %llu\n", temp, contexts[0].archreg_lifetime[temp], contexts[0].archreg_end[temp], contexts[0].archreg_start[temp]);
       }
       
       if(contexts[context_id].ROB[contexts[context_id].ROB_head].physreg >= 0){
@@ -3476,6 +3511,9 @@ wakeup(void)
 {
   
   struct RS_link *node, *next_node;
+//
+    int i = 0;
+    int flag = 0;
 
   for (node = waiting_queue, waiting_queue = NULL;
        node; node = next_node)
@@ -3491,12 +3529,25 @@ wakeup(void)
 	  assert(!rs->queued);
 	  assert(!rs->completed);
 	  readyq_enqueue(rs);
+//
+      i++;
+      flag = 1;
 	}else{
 	  wait_q_enqueue(rs, sim_cycle);
 	}
       }else{
 	RSLINK_FREE(node);
       }
+    }
+    if(flag == 1) {
+      if(i < contexts[0].wakeup_min) {
+        contexts[0].wakeup_min = i; 
+      }
+      if(i > contexts[0].wakeup_max) {
+        contexts[0].wakeup_max = i;
+      }
+      contexts[0].wakeup_average += i;
+      contexts[0].wakeup_count++;
     }
 }
 
@@ -6550,14 +6601,49 @@ sim_main(void)
       /* execute until the first thread reaches max_insts */
       {
 	int i;
+          int j;
+          float k = 0;
+          long long m = 0;
+          long long n = 0;
 	int done = 1;
 	for(i=0;i<num_contexts;i++){
 	  done = 0;
-	  if(!max_insts || contexts[i].sim_num_insn >= max_insts)
+	  if(!max_insts || contexts[i].sim_num_insn >= max_insts){
+          //printf("max_insts\n");
+          printf("ArchReg: ## Count Consumer\t Lifetime\t RenameCycles\n");
+          for(j = 0; j < MD_TOTAL_REGS; j++) {
+              if(contexts[0].archreg_count[j] > 0) {
+                printf("ArchReg:%2d\t %d\t %d\t %lld\t\t %lld\n", j, contexts[0].archreg_count[j], 
+                    contexts[0].archreg_consumer[j]/contexts[0].archreg_count[j], 
+                    contexts[0].archreg_lifetime[j]/contexts[0].archreg_count[j], 
+                    contexts[0].archreg_rename[j]/contexts[0].archreg_count[j]);
+              }else{
+                printf("ArchReg:%2d\t %d\t %d\t %lld\t\t %lld\n", j, contexts[0].archreg_count[j], 
+                    contexts[0].archreg_consumer[j], 
+                    contexts[0].archreg_lifetime[j], 
+                    contexts[0].archreg_rename[j]);
+              }
+
+              if(contexts[0].archreg_count[j] != 0) {
+                k += contexts[0].archreg_consumer[j]/contexts[0].archreg_count[j];
+                m += contexts[0].archreg_lifetime[j]/contexts[0].archreg_count[j];
+                n += contexts[0].archreg_rename[j]/contexts[0].archreg_count[j];
+              }
+          }
+          //printf("%d\n", MD_TOTAL_REGS);
+          printf("ArchReg Consumer Avg: %f\t %f\n", k/MD_TOTAL_REGS, k);
+          printf("ArchReg Lifetime Avg: %f\t %lld\n", (float)m/MD_TOTAL_REGS, m);
+          printf("ArchReg Cycle Avg: %lld\n", n/MD_TOTAL_REGS);
+          printf("WakeupMin: %d\n", contexts[0].wakeup_min);
+          printf("WakeupMax: %d\n", contexts[0].wakeup_max);
+          printf("WakeupAvg: %f\n", (float)contexts[0].wakeup_average/contexts[0].wakeup_count);
 	    return;
+      }
 	}
-	if(done)
+	if(done){
+        printf("done\n");
 	  return;
+    }
       }
     }
 }
@@ -6600,6 +6686,22 @@ void init_context(context* c, int c_id){
       //floating point portion of the rename table
       c->rename_table[i] = (i-32) + c_id*32;
     }
+//
+    for(i = 0; i < MD_TOTAL_REGS; i++) {
+        c->archreg_count[i] = 0;
+        c->archreg_consumer[i] = 0;
+        c->archreg_lifetime[i] = 0;
+        c->archreg_start[i] = 0;
+        c->archreg_end[i] = 0;
+        c->archreg_rename[i] = 0;
+        c->archreg_rename1[i] = 0;
+        c->archreg_rename2[0] = 0;
+    }
+
+    c->wakeup_min = 100;
+    c->wakeup_max = 0;
+    c->wakeup_average = 0;
+    c->wakeup_count = 0;
 
   }
 

@@ -79,6 +79,26 @@ typedef struct context_t{
 
   /* the rename table for this context */
   int rename_table[MD_TOTAL_REGS];
+
+//
+// ArchReg counter
+  int archreg_count[MD_TOTAL_REGS];
+// Average of consumers of each archreg
+  int archreg_consumer[MD_TOTAL_REGS];
+// Average lifetime
+  long long archreg_lifetime[MD_TOTAL_REGS];
+  long long archreg_start[MD_TOTAL_REGS];
+  long long archreg_end[MD_TOTAL_REGS];
+//
+  long long archreg_rename[MD_TOTAL_REGS];
+  long long archreg_rename1[MD_TOTAL_REGS];
+  long long archreg_rename2[MD_TOTAL_REGS];
+
+// Wakeup counters
+  int wakeup_min;
+  int wakeup_max;
+  int wakeup_average;
+  int wakeup_count;
   
   
   /* the create vector, NOTE: speculative copy on write storage provided
