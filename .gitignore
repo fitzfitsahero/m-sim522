@@ -1,0 +1,13 @@
+# Object Files
+*.o
+
+# Libraries
+*.lib
+*.a
+
+# Dynamic Libraries
+*.so
+*.so.*
+
+# SPEC Folder
+spec2k/
