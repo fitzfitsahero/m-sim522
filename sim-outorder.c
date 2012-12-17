@@ -5734,7 +5734,8 @@ dispatch(void)
     my_iq_num = alloc_iq_entry();
     if(my_iq_num < 0){
 	disp_stalled[disp_context_id] = TRUE;
-	continue;
+	//continue;
+    break;
     }
 
     /* update the ROB entry */
