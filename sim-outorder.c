@@ -5809,6 +5809,22 @@ dispatch(void)
       wait_q_enqueue(rs, sim_cycle);
 
     n_dispatched++;
+//
+    int x, iq_count = 0;
+    for(x = 0; x < iq_size; x++)
+    {
+        if(iq[x] == IQ_ENTRY_ALLOC)
+            iq_count++;
+    }
+    //printf("%d ", iq_count);
+    if(iq_count > 24) {
+ //       printf("/2 ");
+        decode_width = 2;
+    }
+    else if(iq_count < 20){
+//        printf("*2 ");
+        decode_width = 4;
+    }
   }
 }
 
@@ -6567,8 +6583,7 @@ sim_main(void)
       /* actually begin the execution of instructions on the functional units */
       execute();
 
-
-      /* dispatch instructions to the IQ */
+     /* dispatch instructions to the IQ */
       dispatch();
 
       /* decode and rename new operations */
