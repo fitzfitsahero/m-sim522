@@ -589,6 +589,15 @@ static void get_reg_set(struct reg_set* my_regs, enum md_opcode op);
 
 
 /*************** SMT **************************/
+//
+/*static struct iq_share {
+    int context;
+    int zero_count;
+    int one_count;
+    int share_count;
+}*iq_s;*/
+static int iq_share[32];
+static int iq_0, iq_1, iq_s0, iq_s1;
 
 /* marks an IQ entry type as free or allocated */
 enum iq_entry{
@@ -2996,6 +3005,19 @@ rob_recover(int branch_index, int context_id)			/* index of mis-pred branch */
 	contexts[context_id].ROB[ROB_index].in_IQ = FALSE;
 	contexts[context_id].icount--;
 	assert(contexts[context_id].icount >= 0);
+//
+    if(context_id == 0) {
+        if(iq_0 == 12)
+            iq_0--;
+        else if(iq_s0 > 0)
+            iq_s0--;
+    }
+    else if(context_id == 1) {
+        if(iq_1 == 12)
+            iq_1--;
+        else if(iq_s1 > 0)
+            iq_s1--;
+    }
       }
 
       if(!contexts[context_id].ROB[ROB_index].dispatched)
@@ -3386,6 +3408,20 @@ execute(void)
 	  /* free up the IQ entry */
 	  if(rs->in_IQ){
 	    free_iq_entry(rs->iq_entry_num);
+//
+    if(rs->context_id == 0) {
+        if(iq_0 == 12)
+            iq_0--;
+        else if(iq_s0 > 0)
+                iq_s0--;
+    }
+    else if(rs->context_id == 1) {
+        if(iq_1 == 12)
+            iq_1--;
+        else if(iq_s1 > 0)
+            iq_s1--;
+    }
+//
 	    rs->in_IQ = 0;
 	    contexts[rs->context_id].icount--;
 	    assert(contexts[rs->context_id].icount >= 0);
@@ -5731,11 +5767,40 @@ dispatch(void)
     num_dispatched[disp_context_id]++;
 
     /* if there are no available IQ slots, then block this thread */
+//
+//  Break when iq is full (12) and shared is full as well
+    //assert((iq_s0 + iq_s1) < 9);
+    if(disp_context_id == 0 && (iq_0 >= 12 && (iq_s0 + iq_s1) <= 8)) {
+        //printf("Context0 Full\n");
+        break;
+    }
+    if(disp_context_id == 1 && (iq_1 >= 12 && (iq_s0 + iq_s1) <= 8)){
+        //printf("Context1 Full\n");
+        break;
+    }
+
     my_iq_num = alloc_iq_entry();
     if(my_iq_num < 0){
 	disp_stalled[disp_context_id] = TRUE;
 	//continue;
     break;
+    }
+
+// Able to alloc an IQ entry, increase the counter for each
+    else{
+        if(disp_context_id == 0){
+            if(iq_0 < 12)
+                iq_0++;
+            else
+                iq_s0++;
+        }
+        else{
+            if(iq_1 < 12)
+                iq_1++;
+            else
+                iq_s1++;
+        }
+        //printf("%d %d %d %d %d\n", iq_0, iq_1, iq_s0, iq_s1, (iq_0 + iq_1 + iq_s0 + iq_s1));
     }
 
     /* update the ROB entry */
@@ -6468,6 +6533,14 @@ sim_main(void)
   
   /* init pipeline structs for full simulation */
   iq = calloc(iq_size, sizeof(enum iq_entry));
+//
+  //iq_s = calloc(iq_size, sizeof(struct iq_share));
+  for(i = 0; i < iq_size; i++)
+      iq_share[i] = -1;
+ iq_0 = 0;
+ iq_1 = 0;
+ iq_s0 = 0;
+ iq_s1 = 0;
   
   for(i=0;i<iq_size;i++){
     *iq = IQ_ENTRY_FREE;
