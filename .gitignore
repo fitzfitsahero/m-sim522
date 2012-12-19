@@ -11,3 +11,6 @@
 
 # SPEC Folder
 spec2K/
+
+# swp files
+*.swp
