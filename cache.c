@@ -544,6 +544,27 @@ cache_access(struct cache_t *cp,	/* cache to access */
   md_addr_t bofs = CACHE_BLK(cp, addr);
   struct cache_blk_t *blk, *repl;
   int lat = 0;
+//
+  if((set & 1) == 0){
+    if(context_id == 0) {
+       /* Do Nothing */ 
+    }
+    else {
+        // Move to the next set up
+        set += 1;
+    }
+  }
+  else{
+    if(context_id == 1){
+      /* Do Nothing */
+    }
+    else {
+     if(set == cp->nsets -1 )
+        set = 0;
+     else
+        set += 1;
+    }
+  }
 
   /* default replacement address */
   if (repl_addr)
